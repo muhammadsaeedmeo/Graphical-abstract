@@ -5,6 +5,10 @@ import streamlit as st
 import pandas as pd
 import graphviz
 from io import BytesIO
+import os
+
+# --- FIX: Add Graphviz to PATH ---
+os.environ["PATH"] += os.pathsep + 'C:/Program Files/Graphviz/bin/'
 
 st.set_page_config(page_title="Graphical Abstract Builder v10", layout="wide")
 
@@ -169,15 +173,22 @@ st.markdown(legend_text)
 
 # --- Download buttons (SVG, PNG, DOT) ---
 try:
+    # FIX: Use the graphviz Source with proper configuration
     graph_obj = graphviz.Source(dot)
-    svg_data = graph_obj.pipe(format="svg")
-    png_data = graph_obj.pipe(format="png")
-
+    
+    # Try different formats
+    svg_data = graph_obj.pipe(format='svg')
+    png_data = graph_obj.pipe(format='png')
+    
     st.download_button("📥 Download .SVG", data=svg_data, file_name="graphical_abstract_v10.svg", mime="image/svg+xml")
     st.download_button("📥 Download .PNG", data=png_data, file_name="graphical_abstract_v10.png", mime="image/png")
+    
+    st.success("✓ Download functionality is working!")
 
-except Exception:
-    st.error("Error: Graphviz not installed correctly. Please install Graphviz locally to enable image downloads.")
+except Exception as e:
+    st.error(f"Download error: {e}")
+    st.info("Please ensure Graphviz is installed and the path is correct. Current PATH includes Graphviz.")
 
+# DOT download should always work
 dot_bytes = dot.encode("utf-8")
 st.download_button("📄 Download .DOT", data=dot_bytes, file_name="graphical_abstract_v10.dot", mime="text/vnd.graphviz")

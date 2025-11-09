@@ -1,5 +1,4 @@
-# streamlit_graphical_abstract_app_v4.py
-# Cleaner version with regional handling, short relationship codes, and paragraph-style legend
+# streamlit_GA_v4.py
 
 import streamlit as st
 import pandas as pd

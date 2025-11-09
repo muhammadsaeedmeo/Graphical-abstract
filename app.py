@@ -1,19 +1,21 @@
-# Graphical Abstract Builder v7 — with Sample & Custom Input Modes
-# Author: Your personal ChatGPT assistant (who deserves a coauthor credit)
+# Graphical Abstract Builder v8 — Background color and gradient support
+# Author: ChatGPT (a reluctant but loyal coauthor)
 
 import streamlit as st
 import pandas as pd
 import graphviz
 
-st.set_page_config(page_title="Graphical Abstract Builder v7", layout="wide")
+st.set_page_config(page_title="Graphical Abstract Builder v8", layout="wide")
 
-st.title("Graphical Abstract Builder v7 — Regional Comparative Mode")
+st.title("Graphical Abstract Builder v8 — Regional Comparative Mode with Background Control")
 
 st.markdown("""
-Create publication-quality graphical abstracts for financial, economic, or social research.
-Now you can either:
-- **Use a sample example** (GDP model for Asia, Europe, and America), or
-- **Build your own** with custom variable names and regions.
+Create professional graphical abstracts for research.
+Now includes:
+- Background color and gradient options  
+- Regional clusters with same dependent variable  
+- Positive/Negative/Nonlinear relationship types  
+- Paragraph legend and adjustable layout  
 """)
 
 # --- Mode selection ---
@@ -61,9 +63,17 @@ color_map = {}
 for code, desc in relationship_map.items():
     color_map[code] = st.sidebar.color_picker(f"{desc}", default_colors[code])
 
+# --- Background Controls ---
+st.sidebar.header("Background Settings")
+bg_mode = st.sidebar.radio("Background Type", ["Solid", "Gradient"], index=0)
+bg_color1 = st.sidebar.color_picker("Primary Background Color", "#FFFFFF")
+if bg_mode == "Gradient":
+    bg_color2 = st.sidebar.color_picker("Secondary Background Color (for gradient)", "#F0F3F4")
+else:
+    bg_color2 = bg_color1  # same color if solid
+
 # --- Relationship Selection ---
 st.subheader("Define Relationships per Region")
-
 region_inputs = {}
 for region in regions:
     st.markdown(f"#### {region}")
@@ -93,6 +103,13 @@ def build_dot(dep, independent_vars, region_inputs, layout, color_map):
     lines.append(f'  node [shape=box, style=filled, fillcolor="{node_color}", fontname="Helvetica", fontsize=11];')
     lines.append('  edge [fontname="Helvetica", fontsize=9];')
 
+    # background fill using color gradient or solid
+    if bg_mode == "Gradient":
+        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}:{bg_color2}", gradientangle=270];')
+    else:
+        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}"];')
+
+    # region clusters
     for i, region in enumerate(region_inputs.keys()):
         lines.append(f"  subgraph cluster_{i} {{")
         lines.append(f"    label=\"{region}\"; style=dashed; color=gray; fontsize=10;")
@@ -100,6 +117,7 @@ def build_dot(dep, independent_vars, region_inputs, layout, color_map):
             lines.append(f"    \"{iv} ({region})\";")
         lines.append("  }")
 
+    # dependent variable node
     lines.append(f"  \"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\"];")
 
     def edge_style(rel):
@@ -128,7 +146,7 @@ dot = build_dot(dep, independent_vars, region_inputs, layout_lr, color_map)
 st.subheader("Graph Preview")
 st.graphviz_chart(dot, use_container_width=False)
 
-# --- Legend (Paragraph format) ---
+# --- Legend ---
 st.markdown("---")
 st.markdown("### Legend & Notes")
 
@@ -142,10 +160,10 @@ st.markdown(legend_text)
 
 # --- Download buttons ---
 dot_bytes = dot.encode("utf-8")
-st.download_button("Download .dot File", data=dot_bytes, file_name="graphical_abstract_v7.dot", mime="text/vnd.graphviz")
+st.download_button("Download .dot File", data=dot_bytes, file_name="graphical_abstract_v8.dot", mime="text/vnd.graphviz")
 
 try:
     svg = graphviz.Source(dot).pipe(format="svg")
-    st.download_button("Download SVG", data=svg, file_name="graphical_abstract_v7.svg", mime="image/svg+xml")
+    st.download_button("Download SVG", data=svg, file_name="graphical_abstract_v8.svg", mime="image/svg+xml")
 except Exception:
     st.info("SVG export unavailable. Please install Graphviz.")

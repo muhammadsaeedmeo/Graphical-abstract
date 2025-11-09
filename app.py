@@ -1,19 +1,18 @@
-# streamlit_graphical_abstract_app.py
-# Streamlit app to build graphical abstracts for papers: choose dependent/independent variables,
-# mark relationships (positive / negative / insignificant), optionally group variables by region,
-# and render an arrow diagram. Also includes a small utility to write requirements.txt.
+# streamlit_graphical_abstract_app_v2.py
+# Streamlit app for graphical abstracts with richer relationships (overall effects & nonlinear)
 
 import streamlit as st
 import pandas as pd
 import io
-import base64
 
-st.set_page_config(page_title="Graphical Abstract Builder", layout="wide")
+st.set_page_config(page_title="Graphical Abstract Builder v2", layout="wide")
 
-st.title("Graphical Abstract Builder — because figures speak louder than your abstract")
-st.markdown("Upload a CSV of your variables or enter them manually. Then pick a dependent variable,\nselect independents, and mark whether each effect is positive, negative or insignificant.")
+st.title("Graphical Abstract Builder v2 — more powerful, more nonlinear")
+st.markdown("""
+Use this app to visualize variable relationships for your paper.  
+Now includes **Overall Positive / Negative / Insignificant** and **Nonlinear** relationship options.
+""")
 
-# Helper: default example dataframe
 EXAMPLE_CSV = """variable,region
 GDP,Asia
 Tourism,Asia
@@ -24,12 +23,11 @@ Trade,Africa
 PolicyIndex,Europe
 """
 
-with st.expander("📄 Example CSV / format (variable,region)"):
+with st.expander("📄 Example CSV format (variable,region)"):
     st.code(EXAMPLE_CSV)
 
-# Data input: upload or paste or use example
 st.sidebar.header("Input")
-upload = st.sidebar.file_uploader("Upload variables CSV (columns: variable, optional: region)", type=["csv"]) 
+upload = st.sidebar.file_uploader("Upload variables CSV (columns: variable, optional region)", type=["csv"])
 use_example = st.sidebar.checkbox("Use example variables", value=False)
 
 if upload is not None:
@@ -44,120 +42,117 @@ else:
             if not line.strip():
                 continue
             parts = [p.strip() for p in line.split(",")]
-            if len(parts) == 1:
-                rows.append({"variable": parts[0], "region": ""})
-            else:
-                rows.append({"variable": parts[0], "region": parts[1]})
+            rows.append({"variable": parts[0], "region": parts[1] if len(parts) > 1 else ""})
         df = pd.DataFrame(rows)
     else:
         df = pd.DataFrame(columns=["variable", "region"])
 
 if "variable" not in df.columns:
-    if df.shape[1] >= 1:
-        df = df.rename(columns={df.columns[0]: "variable"})
-    else:
-        df["variable"] = []
-
+    df["variable"] = []
 if "region" not in df.columns:
     df["region"] = ""
 
-st.sidebar.markdown(f"**Loaded variables:** {len(df)}")
-
 if df.empty:
-    st.warning("No variables provided yet. Paste variables or upload a CSV, or tick 'Use example variables'.")
+    st.warning("Please upload or input variables first.")
     st.stop()
 
-cols = st.columns([1,2])
+cols = st.columns([1.2, 1.8])
 with cols[0]:
-    dep = st.selectbox("Choose dependent variable", options=df['variable'].tolist())
-    inds = st.multiselect("Choose independent variables", options=[v for v in df['variable'].tolist() if v != dep])
-    show_region = st.checkbox("Group variables by region (if region info provided)")
-    layout_lr = st.radio("Layout direction", options=["LR (left->right)", "TB (top->bottom)"], index=0)
+    dep = st.selectbox("Choose dependent variable", options=df["variable"].tolist())
+    inds = st.multiselect("Choose independent variables", [v for v in df["variable"].tolist() if v != dep])
+    show_region = st.checkbox("Group variables by region (if available)")
+    layout_lr = st.radio("Layout", ["LR (left→right)", "TB (top→bottom)"], index=0)
+
+relationship_options = [
+    "Positive", "Negative", "Insignificant",
+    "Overall Positive", "Overall Negative", "Overall Insignificant",
+    "Nonlinear Relationship"
+]
 
 with cols[1]:
-    st.write("**Mark relationships**")
+    st.write("**Define relationships**")
     rel_map = {}
     for iv in inds:
-        rel = st.selectbox(f"Effect of {iv} → {dep}", options=["Positive", "Negative", "Insignificant"], index=0, key=f"rel_{iv}")
+        rel = st.selectbox(f"Effect of {iv} → {dep}", options=relationship_options, key=f"rel_{iv}")
         rel_map[iv] = rel
 
 st.sidebar.header("Styling & Export")
-show_labels = st.sidebar.checkbox("Show sign labels on arrows", value=True)
+show_labels = st.sidebar.checkbox("Show arrow labels", value=True)
 show_legend = st.sidebar.checkbox("Show legend", value=True)
 edge_penwidth = st.sidebar.slider("Arrow thickness", 1, 8, 2)
+node_color = st.sidebar.color_picker("Node color", "#FFFFFF")
 
 def build_dot(dep, inds, rel_map, df, show_region, layout):
-    lines = []
-    lines.append(f"digraph G {{")
-    lines.append(f"  rankdir={ 'LR' if layout=='LR (left->right)' else 'TB' };")
-    lines.append("  node [shape=box, style=filled, fillcolor=white];")
+    lines = ["digraph G {"]
+    lines.append(f"  rankdir={'LR' if 'LR' in layout else 'TB'};")
+    lines.append("  node [shape=box, style=filled, color=gray, fillcolor=\"{}\", penwidth=1.5, fontname=\"Helvetica\", fontsize=12];".format(node_color))
+    lines.append("  edge [fontname=\"Helvetica\", fontsize=10];")
 
-    if show_region and 'region' in df.columns and df['region'].astype(str).str.strip().any():
-        regions = df.set_index('variable')['region'].fillna('').to_dict()
+    # Subgraphs by region
+    if show_region and df["region"].astype(str).str.strip().any():
+        regions = df.set_index("variable")["region"].fillna("").to_dict()
         grouped = {}
         for v, r in regions.items():
-            key = r.strip() or 'Other'
-            grouped.setdefault(key, []).append(v)
+            grouped.setdefault(r or "Other", []).append(v)
         for i, (rname, vars_) in enumerate(grouped.items()):
             lines.append(f"  subgraph cluster_{i} {{")
             lines.append(f"    label=\"{rname}\";")
-            lines.append("    style=dashed;")
+            lines.append("    style=dashed; color=gray;")
             for v in vars_:
-                safe = v.replace('"','\\"')
-                lines.append(f"    \"{safe}\";")
+                lines.append(f"    \"{v}\";")
             lines.append("  }")
     else:
-        for v in df['variable'].tolist():
-            safe = v.replace('"','\\"')
-            lines.append(f"  \"{safe}\";")
+        for v in df["variable"].tolist():
+            lines.append(f"  \"{v}\";")
 
     def edge_props(rel):
-        if rel == 'Positive':
-            return ("green", "+")
-        if rel == 'Negative':
-            return ("red", "-")
-        return ("gray", "ns")
+        if rel == "Positive":
+            return ("green", "+", "solid")
+        if rel == "Negative":
+            return ("red", "-", "solid")
+        if rel == "Insignificant":
+            return ("gray", "ns", "dotted")
+        if rel == "Overall Positive":
+            return ("darkgreen", "Overall +", "bold")
+        if rel == "Overall Negative":
+            return ("darkred", "Overall -", "bold")
+        if rel == "Overall Insignificant":
+            return ("black", "Overall ns", "dashed")
+        if rel == "Nonlinear Relationship":
+            return ("orange", "Nonlinear", "dashed")
+        return ("gray", "?", "dotted")
 
     for iv in inds:
-        color, label = edge_props(rel_map.get(iv, 'Insignificant'))
+        color, label, style = edge_props(rel_map.get(iv, "Insignificant"))
         lbl = f" label=\"{label}\"" if show_labels else ""
-        safe_iv = iv.replace('"','\\"')
-        safe_dep = dep.replace('"','\\"')
-        lines.append(f"  \"{safe_iv}\" -> \"{safe_dep}\" [color={color}, penwidth={edge_penwidth}{lbl}];")
+        lines.append(f"  \"{iv}\" -> \"{dep}\" [color={color}, penwidth={edge_penwidth}, style={style}{lbl}];")
 
     if show_legend:
-        lines.append('  subgraph cluster_legend {')
-        lines.append('    label="Legend";')
-        lines.append('    key_pos [label="+ : positive\\n- : negative\\nns : insignificant", shape=note];')
-        lines.append('  }')
+        lines.append("  subgraph cluster_legend {")
+        lines.append("    label=\"Legend\";")
+        lines.append("    key [shape=note, label=\""
+                     "+ : Positive\\n- : Negative\\nns : Insignificant\\nOverall +/- : Aggregate Effect\\nNonlinear : Curved/Complex Relation\", fontsize=10];")
+        lines.append("  }")
 
-    lines.append('}')
+    lines.append("}")
     return "\n".join(lines)
 
 dot = build_dot(dep, inds, rel_map, df, show_region, layout_lr)
 
-st.subheader("Preview")
+st.subheader("Graph Preview")
 st.graphviz_chart(dot)
 
-b = dot.encode('utf-8')
-st.download_button("Download DOT (Graphviz) file", data=b, file_name="graphical_abstract.dot", mime="text/vnd.graphviz")
+b = dot.encode("utf-8")
+st.download_button("Download .dot file", data=b, file_name="graphical_abstract_v2.dot", mime="text/vnd.graphviz")
 
 try:
     import graphviz
-    svg = graphviz.Source(dot).pipe(format='svg')
-    st.download_button("Download SVG image", data=svg, file_name="graphical_abstract.svg", mime="image/svg+xml")
-except Exception as e:
-    st.info("SVG export unavailable. Install the 'graphviz' system package and Python library to enable export.")
-
-REQUIREMENTS = """streamlit
-pandas
-graphviz
-"""
-
-if st.button("Write requirements.txt to disk (useful for virtualenv)"):
-    with open('requirements.txt', 'w', encoding='utf-8') as f:
-        f.write(REQUIREMENTS)
-    st.success("requirements.txt written to current working directory")
+    svg = graphviz.Source(dot).pipe(format="svg")
+    st.download_button("Download SVG", data=svg, file_name="graphical_abstract_v2.svg", mime="image/svg+xml")
+    png = graphviz.Source(dot).pipe(format="png")
+    st.download_button("Download PNG", data=png, file_name="graphical_abstract_v2.png", mime="image/png")
+except Exception:
+    st.info("SVG/PNG export unavailable. Install 'graphviz' system package and Python library.")
 
 st.markdown("---")
-st.markdown("Notes: If you need more complex layouts or multiple dependent variables, this app can be extended easily.")
+st.caption("Graphical Abstract Builder v2 — because regression tables deserve prettier friends.")

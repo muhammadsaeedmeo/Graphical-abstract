@@ -6,9 +6,21 @@ import pandas as pd
 import graphviz
 from io import BytesIO
 import os
+import subprocess
 
-# --- FIX: Add Graphviz to PATH ---
-os.environ["PATH"] += os.pathsep + 'C:/Program Files/Graphviz/bin/'
+# --- FIX: Proper Graphviz PATH configuration for Windows ---
+graphviz_paths = [
+    'C:/Program Files/Graphviz/bin',
+    'C:/Program Files (x86)/Graphviz/bin',
+    'C:/Users/' + os.getenv('USERNAME') + '/AppData/Local/Programs/Graphviz/bin'
+]
+
+for path in graphviz_paths:
+    if os.path.exists(path):
+        os.environ["PATH"] += os.pathsep + path
+        break
+else:
+    st.warning("Graphviz not found in standard locations. Please ensure Graphviz is installed.")
 
 st.set_page_config(page_title="Graphical Abstract Builder v10", layout="wide")
 
@@ -171,24 +183,77 @@ legend_text += ", ".join([f"**{iv[:3].upper()}** = {iv}" for iv in independent_v
 
 st.markdown(legend_text)
 
-# --- Download buttons (SVG, PNG, DOT) ---
+# --- FIXED Download buttons (SVG, PNG, DOT) ---
+st.markdown("---")
+st.subheader("Download Options")
+
 try:
-    # FIX: Use the graphviz Source with proper configuration
-    graph_obj = graphviz.Source(dot)
+    # Test if Graphviz is working
+    result = subprocess.run(['dot', '-V'], capture_output=True, text=True, shell=True)
+    if result.returncode == 0:
+        st.success(f"✓ Graphviz detected: {result.stdout.strip()}")
+    else:
+        st.error("Graphviz not found. Please check installation.")
+        st.stop()
+        
+except Exception as e:
+    st.error(f"❌ Graphviz not accessible: {e}")
+    st.info("""
+    **Troubleshooting steps:**
+    1. Ensure Graphviz is installed from https://graphviz.org/download/
+    2. Add Graphviz to your system PATH
+    3. Restart your computer after installation
+    4. Restart Streamlit after these changes
+    """)
+    st.stop()
+
+# Proceed with downloads if Graphviz is working
+try:
+    # Use graphviz with proper engine configuration
+    graph_obj = graphviz.Source(dot, format='svg')
     
-    # Try different formats
+    # Generate SVG
     svg_data = graph_obj.pipe(format='svg')
-    png_data = graph_obj.pipe(format='png')
+    st.download_button(
+        "📥 Download .SVG", 
+        data=svg_data, 
+        file_name="graphical_abstract_v10.svg", 
+        mime="image/svg+xml"
+    )
     
-    st.download_button("📥 Download .SVG", data=svg_data, file_name="graphical_abstract_v10.svg", mime="image/svg+xml")
-    st.download_button("📥 Download .PNG", data=png_data, file_name="graphical_abstract_v10.png", mime="image/png")
+    # Generate PNG
+    png_data = graph_obj.pipe(format='png')
+    st.download_button(
+        "📥 Download .PNG", 
+        data=png_data, 
+        file_name="graphical_abstract_v10.png", 
+        mime="image/png"
+    )
     
     st.success("✓ Download functionality is working!")
 
 except Exception as e:
     st.error(f"Download error: {e}")
-    st.info("Please ensure Graphviz is installed and the path is correct. Current PATH includes Graphviz.")
+    st.info("Trying alternative method...")
+    
+    # Alternative method using temporary files
+    try:
+        graph_obj = graphviz.Source(dot)
+        graph_obj.render('temp_graph', format='svg', cleanup=True)
+        with open('temp_graph.svg', 'rb') as f:
+            svg_data = f.read()
+        st.download_button("📥 Download .SVG (Alternative)", data=svg_data, file_name="graphical_abstract_v10.svg", mime="image/svg+xml")
+    except Exception as alt_e:
+        st.error(f"Alternative method also failed: {alt_e}")
 
 # DOT download should always work
 dot_bytes = dot.encode("utf-8")
-st.download_button("📄 Download .DOT", data=dot_bytes, file_name="graphical_abstract_v10.dot", mime="text/vnd.graphviz")
+st.download_button(
+    "📄 Download .DOT Source", 
+    data=dot_bytes, 
+    file_name="graphical_abstract_v10.dot", 
+    mime="text/vnd.graphviz"
+)
+
+st.markdown("---")
+st.info("**Note:** If downloads fail, you can use the .DOT file with any Graphviz viewer online or offline.")

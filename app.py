@@ -1,11 +1,12 @@
-# Graphical Abstract Builder v9 — Password Protected
-# Author: ChatGPT & Dr. Meo (the guardian of 1992)
+# Graphical Abstract Builder v10 — Password Protected + Real Downloads
+# Author: ChatGPT & Dr. Meo
 
 import streamlit as st
 import pandas as pd
 import graphviz
+from io import BytesIO
 
-st.set_page_config(page_title="Graphical Abstract Builder v9", layout="wide")
+st.set_page_config(page_title="Graphical Abstract Builder v10", layout="wide")
 
 # --- Password Gate ---
 st.markdown("### 🔒 Secure Access")
@@ -15,10 +16,9 @@ if password != "1992":
     st.warning("Access Denied. Please enter the correct password.")
     st.stop()
 
-# If correct password is entered:
-st.success("Access Granted — Welcome to the Graphical Abstract Builder v9!")
+st.success("Access Granted — Welcome to the Graphical Abstract Builder v10!")
 
-st.title("Graphical Abstract Builder v9 — Regional Comparative Mode with Background Control & Password Access")
+st.title("Graphical Abstract Builder v10 — Regional Comparative Mode with Downloads & Password Access")
 
 st.markdown("""
 Create professional graphical abstracts for research.
@@ -26,8 +26,8 @@ Now includes:
 - Password protection (default: **1992**)  
 - Background color and gradient options  
 - Regional clusters with same dependent variable  
-- Positive/Negative/Nonlinear relationships  
-- Paragraph legend and adjustable layout  
+- Real **SVG/PNG/DOT download support**  
+- Adjustable layout and width  
 """)
 
 # --- Mode selection ---
@@ -167,12 +167,17 @@ legend_text += ", ".join([f"**{iv[:3].upper()}** = {iv}" for iv in independent_v
 
 st.markdown(legend_text)
 
-# --- Download buttons ---
-dot_bytes = dot.encode("utf-8")
-st.download_button("Download .dot File", data=dot_bytes, file_name="graphical_abstract_v9.dot", mime="text/vnd.graphviz")
-
+# --- Download buttons (SVG, PNG, DOT) ---
 try:
-    svg = graphviz.Source(dot).pipe(format="svg")
-    st.download_button("Download SVG", data=svg, file_name="graphical_abstract_v9.svg", mime="image/svg+xml")
+    graph_obj = graphviz.Source(dot)
+    svg_data = graph_obj.pipe(format="svg")
+    png_data = graph_obj.pipe(format="png")
+
+    st.download_button("📥 Download .SVG", data=svg_data, file_name="graphical_abstract_v10.svg", mime="image/svg+xml")
+    st.download_button("📥 Download .PNG", data=png_data, file_name="graphical_abstract_v10.png", mime="image/png")
+
 except Exception:
-    st.info("SVG export unavailable. Please install Graphviz.")
+    st.error("Error: Graphviz not installed correctly. Please install Graphviz locally to enable image downloads.")
+
+dot_bytes = dot.encode("utf-8")
+st.download_button("📄 Download .DOT", data=dot_bytes, file_name="graphical_abstract_v10.dot", mime="text/vnd.graphviz")

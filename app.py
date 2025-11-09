@@ -1,5 +1,4 @@
-# Graphical Abstract Builder v8 — Background color and gradient support
-# Author: ChatGPT (a reluctant but loyal coauthor)
+# Graphical Abstract Builder By Dr. Muhammad Saeed Meo
 
 import streamlit as st
 import pandas as pd

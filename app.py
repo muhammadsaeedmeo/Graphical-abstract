@@ -30,8 +30,7 @@ Now includes:
 - Password protection (default: **1992**)  
 - Background color and gradient options  
 - Regional clusters with same dependent variable  
-- Real **SVG/PNG/DOT download support**  
-- Adjustable layout and width  
+- Real **SVG/PNG/DOT download support** - Adjustable layout and width  
 """)
 
 # --- Mode selection ---
@@ -124,35 +123,14 @@ def build_dot(dep, independent_vars, region_inputs, layout, color_map):
     else:
         lines.append(f'  graph [style=filled, fillcolor="{bg_color1}"];')
 
-    # Calculate total nodes to determine if DV should be centered
-    total_vars = len(independent_vars) * len(region_inputs)
-    
-    # If many variables (>6), use center positioning for DV
-    if total_vars > 6:
-        # Create invisible nodes for better centering
-        lines.append('  { rank=same;')
-        for i, region in enumerate(region_inputs.keys()):
-            lines.append(f"    subgraph cluster_{i} {{")
-            lines.append(f"      label=\"{region}\"; style=dashed; color=gray; fontsize=10;")
-            for iv in independent_vars:
-                lines.append(f"      \"{iv} ({region})\";")
-            lines.append("    }")
-        lines.append('  }')
-        
-        # Place DV in center rank
-        lines.append('  { rank=same;')
-        lines.append(f"    \"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\"];")
-        lines.append('  }')
-    else:
-        # For fewer variables, standard layout
-        for i, region in enumerate(region_inputs.keys()):
-            lines.append(f"  subgraph cluster_{i} {{")
-            lines.append(f"    label=\"{region}\"; style=dashed; color=gray; fontsize=10;")
-            for iv in independent_vars:
-                lines.append(f"    \"{iv} ({region})\";")
-            lines.append("  }")
-        
-        lines.append(f"  \"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\"];")
+    for i, region in enumerate(region_inputs.keys()):
+        lines.append(f"  subgraph cluster_{i} {{")
+        lines.append(f"    label=\"{region}\"; style=dashed; color=gray; fontsize=10;")
+        for iv in independent_vars:
+            lines.append(f"    \"{iv} ({region})\";")
+        lines.append("  }")
+
+    lines.append(f"  \"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\"];")
 
     def edge_style(rel):
         if "N" in rel and rel != "NEG":

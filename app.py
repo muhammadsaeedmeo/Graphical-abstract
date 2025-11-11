@@ -1,63 +1,215 @@
+# Graphical Abstract Builder v10 — Password Protected + Real Downloads
+# Author: ChatGPT & Dr. Meo
+
 import streamlit as st
+import pandas as pd
 import graphviz
+from io import BytesIO
+import os
 
-# ========================
-# Academic Conceptual Framework
-# ========================
+# --- FIX: Add Graphviz to PATH ---
+os.environ["PATH"] += os.pathsep + 'C:/Program Files/Graphviz/bin/'
 
-st.set_page_config(page_title="Quantile Regression Conceptual Framework", layout="wide")
+st.set_page_config(page_title="Graphical Abstract Builder v10", layout="wide")
 
-st.title("📘 Conceptual Framework: Quantile Regression for Tourism Demand")
+# --- Password Gate ---
+st.markdown("### 🔒 Secure Access")
+password = st.text_input("Enter password to access the app:", type="password")
+
+if password != "1992":
+    st.warning("Access Denied. Please enter the correct password.")
+    st.stop()
+
+st.success("Access Granted — Welcome to the Graphical Abstract Builder v10!")
+
+st.title("Graphical Abstract Builder v10 — Regional Comparative Mode with Downloads & Password Access")
 
 st.markdown("""
-This figure visualizes the hypothesized structure of the quantile regression model,
-emphasizing heterogeneous effects of macroeconomic and environmental variables on tourism demand across quantiles.
+Create professional graphical abstracts for research.
+Now includes:
+- Password protection (default: **1992**)  
+- Background color and gradient options  
+- Regional clusters with same dependent variable  
+- Real **SVG/PNG/DOT download support**  
+- Adjustable layout and width  
 """)
 
-# --- Graphviz Setup ---
-dot = graphviz.Digraph(format='png')
-dot.attr(rankdir='LR', bgcolor='white', splines='curved', nodesep='1.0', ranksep='1.2')
-dot.attr('node', shape='box', style='rounded,filled', fontname='Helvetica', fontsize='12')
+# --- Mode selection ---
+mode = st.selectbox("Select Mode", ["Sample Example", "Custom Input"])
 
-# --- Core Variables ---
-dot.node('Y', 'Tourism Demand\n(Dependent Variable)', fillcolor='#003366', fontcolor='white', penwidth='2')
+if mode == "Sample Example":
+    regions = ["Asia", "Europe", "America"]
+    dep = "GDP"
+    independent_vars = ["Inflation", "Tourism", "Political Stability"]
+else:
+    st.sidebar.header("Custom Inputs")
+    regions_input = st.sidebar.text_input("Regions (comma-separated)", "Asia,Europe,America")
+    regions = [r.strip() for r in regions_input.split(",") if r.strip()]
+    dep = st.sidebar.text_input("Dependent Variable", "GDP")
+    ind_vars_input = st.sidebar.text_input("Independent Variables (comma-separated)", "Inflation,Tourism,Political Stability")
+    independent_vars = [v.strip() for v in ind_vars_input.split(",") if v.strip()]
 
-independent_vars = [
-    ('X1', 'Real Effective Exchange Rate'),
-    ('X2', 'Green Bond Issuance'),
-    ('X3', 'GDP Growth'),
-    ('X4', 'Environmental Policy Index'),
-    ('X5', 'Financial Development'),
-]
+# --- Relationship definitions ---
+relationship_map = {
+    "POS": "Positive",
+    "NEG": "Negative",
+    "INS": "Insignificant",
+    "OP": "Overall Positive",
+    "ON": "Overall Negative",
+    "OI": "Overall Insignificant",
+    "OPN": "Overall Positive (NL)",
+    "ONN": "Overall Negative (NL)",
+    "OIN": "Overall Insignificant (NL)"
+}
 
-for code, label in independent_vars:
-    dot.node(code, label, fillcolor='#e8f1f9', fontcolor='#002b36', penwidth='1')
+default_colors = {
+    "POS": "#27AE60",
+    "NEG": "#E74C3C",
+    "INS": "#95A5A6",
+    "OP": "#2ECC71",
+    "ON": "#C0392B",
+    "OI": "#7F8C8D",
+    "OPN": "#16A085",
+    "ONN": "#8E44AD",
+    "OIN": "#34495E"
+}
 
-# --- Quantile Layers ---
-quantiles = ['τ=0.1', 'τ=0.25', 'τ=0.5', 'τ=0.75', 'τ=0.9']
-for q in quantiles:
-    dot.node(q, q, shape='circle', fillcolor='#a7c6e5', style='filled', width='0.4')
+st.sidebar.header("Customize Relationship Colors")
+color_map = {}
+for code, desc in relationship_map.items():
+    color_map[code] = st.sidebar.color_picker(f"{desc}", default_colors[code])
 
-# --- Edges: Predictors → Quantiles ---
-for code, _ in independent_vars:
-    for q in quantiles:
-        dot.edge(code, q, color='#6699cc', penwidth='1.2')
+# --- Background Controls ---
+st.sidebar.header("Background Settings")
+bg_mode = st.sidebar.radio("Background Type", ["Solid", "Gradient"], index=0)
+bg_color1 = st.sidebar.color_picker("Primary Background Color", "#FFFFFF")
+if bg_mode == "Gradient":
+    bg_color2 = st.sidebar.color_picker("Secondary Background Color (for gradient)", "#F0F3F4")
+else:
+    bg_color2 = bg_color1
 
-# --- Edges: Quantiles → Dependent Variable ---
-for q in quantiles:
-    dot.edge(q, 'Y', color='#003366', penwidth='1.5')
+# --- Relationship Selection ---
+st.subheader("Define Relationships per Region")
+region_inputs = {}
+for region in regions:
+    st.markdown(f"#### {region}")
+    rel_map = {}
+    for iv in independent_vars:
+        rel = st.selectbox(
+            f"{iv} → {dep} ({region})",
+            options=list(relationship_map.keys()),
+            key=f"{region}_{iv}"
+        )
+        rel_map[iv] = rel
+    region_inputs[region] = rel_map
 
-# --- Equation Node ---
-dot.node('EQ', 'Quantile Process:\nQτ(Y|X) = X′β(τ)', shape='note', fillcolor='#f5f5f5', fontcolor='#003366', fontsize='11')
-dot.edge('Y', 'EQ', style='dashed', color='gray', penwidth='1')
+# --- Styling ---
+st.sidebar.header("Styling Options")
+show_labels = st.sidebar.checkbox("Show relationship codes on arrows", value=True)
+edge_penwidth = st.sidebar.slider("Arrow thickness", 1, 8, 2)
+node_color = st.sidebar.color_picker("Node color", "#FFFFFF")
+layout_lr = st.sidebar.radio("Layout Direction", ["Left→Right", "Top→Bottom"], index=0)
+width = st.sidebar.slider("Graph width", 500, 2000, 1000, step=100)
+height = st.sidebar.slider("Graph height", 300, 1500, 700, step=100)
 
-# --- Render in Streamlit ---
-st.graphviz_chart(dot, use_container_width=True)
+# --- Graphviz builder ---
+def build_dot(dep, independent_vars, region_inputs, layout, color_map):
+    lines = ["digraph G {"]
+    lines.append(f"  rankdir={'LR' if 'Left' in layout else 'TB'};")
+    lines.append(f'  node [shape=box, style=filled, fillcolor="{node_color}", fontname="Helvetica", fontsize=11];')
+    lines.append('  edge [fontname="Helvetica", fontsize=9];')
 
-# --- Academic Note ---
-st.markdown("""
-#### Notes:
-- Blue gradient circles denote conditional quantiles (τ = 0.1–0.9).  
-- Directed edges represent the heterogeneous marginal impact of predictors on tourism demand across quantiles.  
-- The specification aligns with **Koenker & Bassett (1978)** and panel extensions by **Canay (2011)** and **Powell (2020)**.  
-""")
+    if bg_mode == "Gradient":
+        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}:{bg_color2}", gradientangle=270];')
+    else:
+        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}"];')
+
+    # Calculate total nodes to determine if DV should be centered
+    total_vars = len(independent_vars) * len(region_inputs)
+    
+    # If many variables (>6), use center positioning for DV
+    if total_vars > 6:
+        # Create invisible nodes for better centering
+        lines.append('  { rank=same;')
+        for i, region in enumerate(region_inputs.keys()):
+            lines.append(f"    subgraph cluster_{i} {{")
+            lines.append(f"      label=\"{region}\"; style=dashed; color=gray; fontsize=10;")
+            for iv in independent_vars:
+                lines.append(f"      \"{iv} ({region})\";")
+            lines.append("    }")
+        lines.append('  }')
+        
+        # Place DV in center rank
+        lines.append('  { rank=same;')
+        lines.append(f"    \"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\"];")
+        lines.append('  }')
+    else:
+        # For fewer variables, standard layout
+        for i, region in enumerate(region_inputs.keys()):
+            lines.append(f"  subgraph cluster_{i} {{")
+            lines.append(f"    label=\"{region}\"; style=dashed; color=gray; fontsize=10;")
+            for iv in independent_vars:
+                lines.append(f"    \"{iv} ({region})\";")
+            lines.append("  }")
+        
+        lines.append(f"  \"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\"];")
+
+    def edge_style(rel):
+        if "N" in rel and rel != "NEG":
+            return "dashed"
+        if rel.startswith("O"):
+            return "bold"
+        if rel == "INS":
+            return "dotted"
+        return "solid"
+
+    for region, rels in region_inputs.items():
+        for iv, rel in rels.items():
+            iv_label = f"{iv} ({region})"
+            color = color_map.get(rel, "#7F8C8D")
+            style = edge_style(rel)
+            label = rel if show_labels else ""
+            lines.append(f"  \"{iv_label}\" -> \"{dep}\" [color=\"{color}\", penwidth={edge_penwidth}, style={style}, label=\"{label}\"];")
+
+    lines.append("}")
+    return "\n".join(lines)
+
+dot = build_dot(dep, independent_vars, region_inputs, layout_lr, color_map)
+
+# --- Graph Preview ---
+st.subheader("Graph Preview")
+st.graphviz_chart(dot, use_container_width=False)
+
+# --- Legend ---
+st.markdown("---")
+st.markdown("### Legend & Notes")
+
+legend_text = "**Relationship Codes:** "
+legend_text += ", ".join([f"**{k}** = {v}" for k, v in relationship_map.items()])
+legend_text += "\n\n**Variable Abbreviations (example):** "
+legend_text += f"**{dep[:3].upper()}** = {dep}, "
+legend_text += ", ".join([f"**{iv[:3].upper()}** = {iv}" for iv in independent_vars])
+
+st.markdown(legend_text)
+
+# --- Download buttons (SVG, PNG, DOT) ---
+try:
+    # FIX: Use the graphviz Source with proper configuration
+    graph_obj = graphviz.Source(dot)
+    
+    # Try different formats
+    svg_data = graph_obj.pipe(format='svg')
+    png_data = graph_obj.pipe(format='png')
+    
+    st.download_button("📥 Download .SVG", data=svg_data, file_name="graphical_abstract_v10.svg", mime="image/svg+xml")
+    st.download_button("📥 Download .PNG", data=png_data, file_name="graphical_abstract_v10.png", mime="image/png")
+    
+    st.success("✓ Download functionality is working!")
+
+except Exception as e:
+    st.error(f"Download error: {e}")
+    st.info("Please ensure Graphviz is installed and the path is correct. Current PATH includes Graphviz.")
+
+# DOT download should always work
+dot_bytes = dot.encode("utf-8")
+st.download_button("📄 Download .DOT", data=dot_bytes, file_name="graphical_abstract_v10.dot", mime="text/vnd.graphviz")

@@ -1,4 +1,4 @@
-# Graphical Abstract Builder v10 — Password Protected + Real Downloads
+# Graphical Abstract Builder v11 — Radial Layout + PNG Download
 # Author: ChatGPT & Dr. Meo
 
 import streamlit as st
@@ -10,7 +10,7 @@ import os
 # --- FIX: Add Graphviz to PATH ---
 os.environ["PATH"] += os.pathsep + 'C:/Program Files/Graphviz/bin/'
 
-st.set_page_config(page_title="Graphical Abstract Builder v10", layout="wide")
+st.set_page_config(page_title="Graphical Abstract Builder v11", layout="wide")
 
 # --- Password Gate ---
 st.markdown("### 🔒 Secure Access")
@@ -20,18 +20,18 @@ if password != "1992":
     st.warning("Access Denied. Please enter the correct password.")
     st.stop()
 
-st.success("Access Granted — Welcome to the Graphical Abstract Builder v10!")
+st.success("Access Granted — Welcome to the Graphical Abstract Builder v11!")
 
-st.title("Graphical Abstract Builder v10 — Regional Comparative Mode with Downloads & Password Access")
+st.title("Graphical Abstract Builder v11 — 360° Radial Mode with PNG Download")
 
 st.markdown("""
-Create professional graphical abstracts for research.
+Create professional **radial graphical abstracts** for research.
 Now includes:
-- Password protection (default: **1992**)  
-- Background color and gradient options  
-- Regional clusters with same dependent variable  
-- Real **SVG/PNG/DOT download support**  
-- Adjustable layout and width  
+- Password protection  
+- Central dependent variable layout  
+- 360° connections from independent variables  
+- Gradient or solid background  
+- Real **SVG/PNG/DOT** export  
 """)
 
 # --- Mode selection ---
@@ -108,31 +108,42 @@ st.sidebar.header("Styling Options")
 show_labels = st.sidebar.checkbox("Show relationship codes on arrows", value=True)
 edge_penwidth = st.sidebar.slider("Arrow thickness", 1, 8, 2)
 node_color = st.sidebar.color_picker("Node color", "#FFFFFF")
-layout_lr = st.sidebar.radio("Layout Direction", ["Left→Right", "Top→Bottom"], index=0)
 width = st.sidebar.slider("Graph width", 500, 2000, 1000, step=100)
 height = st.sidebar.slider("Graph height", 300, 1500, 700, step=100)
 
-# --- Graphviz builder ---
-def build_dot(dep, independent_vars, region_inputs, layout, color_map):
-    lines = ["digraph G {"]
-    lines.append(f"  rankdir={'LR' if 'Left' in layout else 'TB'};")
+# --- Graphviz builder (Radial) ---
+def build_radial_dot(dep, independent_vars, region_inputs, color_map):
+    lines = ['graph [layout=neato, overlap=false, outputorder=edgesfirst, splines=true];']
+    lines.append('digraph G {')
+    lines.append(f'  layout=neato;')
     lines.append(f'  node [shape=box, style=filled, fillcolor="{node_color}", fontname="Helvetica", fontsize=11];')
     lines.append('  edge [fontname="Helvetica", fontsize=9];')
 
+    # Background
     if bg_mode == "Gradient":
         lines.append(f'  graph [style=filled, fillcolor="{bg_color1}:{bg_color2}", gradientangle=270];')
     else:
         lines.append(f'  graph [style=filled, fillcolor="{bg_color1}"];')
 
-    for i, region in enumerate(region_inputs.keys()):
-        lines.append(f"  subgraph cluster_{i} {{")
-        lines.append(f"    label=\"{region}\"; style=dashed; color=gray; fontsize=10;")
-        for iv in independent_vars:
-            lines.append(f"    \"{iv} ({region})\";")
-        lines.append("  }")
+    # Central node
+    lines.append(f'  "{dep}" [shape=ellipse, width=2.5, height=1.2, style=filled, fillcolor="#ECF0F1", pos="0,0!"];')
 
-    lines.append(f"  \"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\"];")
+    # Place independent variables radially
+    import math
+    total_vars = len(independent_vars) * len(region_inputs)
+    radius = 4.0
 
+    idx = 0
+    for r_i, (region, rels) in enumerate(region_inputs.items()):
+        angle_offset = (2 * math.pi / len(region_inputs)) * r_i
+        for iv_i, iv in enumerate(independent_vars):
+            angle = angle_offset + (2 * math.pi / len(independent_vars)) * iv_i / len(region_inputs)
+            x = radius * math.cos(angle)
+            y = radius * math.sin(angle)
+            node_name = f"{iv} ({region})"
+            lines.append(f'  "{node_name}" [pos="{x},{y}!", shape=box];')
+
+    # Arrows from IVs to Dependent
     def edge_style(rel):
         if "N" in rel and rel != "NEG":
             return "dashed"
@@ -144,19 +155,18 @@ def build_dot(dep, independent_vars, region_inputs, layout, color_map):
 
     for region, rels in region_inputs.items():
         for iv, rel in rels.items():
-            iv_label = f"{iv} ({region})"
             color = color_map.get(rel, "#7F8C8D")
             style = edge_style(rel)
             label = rel if show_labels else ""
-            lines.append(f"  \"{iv_label}\" -> \"{dep}\" [color=\"{color}\", penwidth={edge_penwidth}, style={style}, label=\"{label}\"];")
+            lines.append(f'  "{iv} ({region})" -> "{dep}" [color="{color}", penwidth={edge_penwidth}, style={style}, label="{label}"];')
 
     lines.append("}")
     return "\n".join(lines)
 
-dot = build_dot(dep, independent_vars, region_inputs, layout_lr, color_map)
+dot = build_radial_dot(dep, independent_vars, region_inputs, color_map)
 
 # --- Graph Preview ---
-st.subheader("Graph Preview")
+st.subheader("Radial Graph Preview")
 st.graphviz_chart(dot, use_container_width=False)
 
 # --- Legend ---
@@ -168,27 +178,23 @@ legend_text += ", ".join([f"**{k}** = {v}" for k, v in relationship_map.items()]
 legend_text += "\n\n**Variable Abbreviations (example):** "
 legend_text += f"**{dep[:3].upper()}** = {dep}, "
 legend_text += ", ".join([f"**{iv[:3].upper()}** = {iv}" for iv in independent_vars])
-
 st.markdown(legend_text)
 
-# --- Download buttons (SVG, PNG, DOT) ---
+# --- Download buttons ---
 try:
-    # FIX: Use the graphviz Source with proper configuration
-    graph_obj = graphviz.Source(dot)
-    
-    # Try different formats
+    graph_obj = graphviz.Source(dot, engine="neato")
     svg_data = graph_obj.pipe(format='svg')
     png_data = graph_obj.pipe(format='png')
-    
-    st.download_button("📥 Download .SVG", data=svg_data, file_name="graphical_abstract_v10.svg", mime="image/svg+xml")
-    st.download_button("📥 Download .PNG", data=png_data, file_name="graphical_abstract_v10.png", mime="image/png")
-    
-    st.success("✓ Download functionality is working!")
+
+    st.download_button("📥 Download .SVG", data=svg_data, file_name="graphical_abstract_v11.svg", mime="image/svg+xml")
+    st.download_button("📥 Download .PNG", data=png_data, file_name="graphical_abstract_v11.png", mime="image/png")
+
+    st.success("✓ PNG/SVG downloads are fully operational!")
 
 except Exception as e:
     st.error(f"Download error: {e}")
-    st.info("Please ensure Graphviz is installed and the path is correct. Current PATH includes Graphviz.")
+    st.info("Ensure Graphviz (neato) is correctly installed and added to PATH.")
 
-# DOT download should always work
+# Always allow DOT download
 dot_bytes = dot.encode("utf-8")
-st.download_button("📄 Download .DOT", data=dot_bytes, file_name="graphical_abstract_v10.dot", mime="text/vnd.graphviz")
+st.download_button("📄 Download .DOT", data=dot_bytes, file_name="graphical_abstract_v11.dot", mime="text/vnd.graphviz")

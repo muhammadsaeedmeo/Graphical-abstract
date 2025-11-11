@@ -8,7 +8,7 @@ from io import BytesIO
 import os
 
 # --- FIX: Add Graphviz to PATH ---
-# Note: This line is platform-specific and might need adjustment for users without Graphviz installed locally.
+# Note: This line is platform-specific and might need adjustment.
 os.environ["PATH"] += os.pathsep + 'C:/Program Files/Graphviz/bin/'
 
 st.set_page_config(page_title="Graphical Abstract Builder v10", layout="wide")
@@ -104,51 +104,76 @@ st.sidebar.header("Styling Options")
 show_labels = st.sidebar.checkbox("Show relationship codes on arrows", value=True)
 edge_penwidth = st.sidebar.slider("Arrow thickness", 1, 8, 2)
 node_color = st.sidebar.color_picker("Node color", "#FFFFFF")
-# Removed layout_lr radio since the layout is now forced to be radial/TB for centering.
-# Removed width/height sliders to let Graphviz handle best fit for the radial layout.
+# We'll stick to 'LR' (Left to Right) for stability but force the DV to a central vertical position
+# by strategically placing IV nodes up and down.
+layout_lr = "Left→Right" # Fixed for the central DV requirement
 
-# --- Graphviz builder (MODIFIED) ---
-def build_dot(dep, independent_vars, region_inputs, color_map):
+# --- Graphviz builder (Corrected for Centering) ---
+def build_dot(dep, independent_vars, region_inputs, layout, color_map):
     lines = ["digraph G {"]
-    # Force layout to Top-Bottom for central DV placement
-    lines.append("  rankdir=TB;") 
-    # Use splines=curved or ortho to improve pathing around the central node
-    lines.append("  splines=curved;")
+    # Use LR (Left to Right) layout for the main flow
+    lines.append(f"  rankdir=LR;") 
+    lines.append("  splines=curved;") # Curved splines for aesthetics
+    lines.append('  nodesep=0.5; ranksep=1.0;') # Increase separation for better spacing
     lines.append(f'  node [shape=box, style=filled, fillcolor="{node_color}", fontname="Helvetica", fontsize=11];')
     lines.append('  edge [fontname="Helvetica", fontsize=9];')
 
     if bg_mode == "Gradient":
-        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}:{bg_color2}", gradientangle=270, nodesep=0.6];')
+        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}:{bg_color2}", gradientangle=270];')
     else:
-        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}", nodesep=0.6];')
+        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}"];')
+
+    # Central DV Node
+    dv_node = f"\"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\", penwidth=3];"
+    lines.append(dv_node)
+
+    # We split IVs into two groups (top and bottom rank) to position the DV in the vertical middle.
+    num_ivs = len(independent_vars)
+    top_ivs = independent_vars[:(num_ivs // 2)]
+    bottom_ivs = independent_vars[(num_ivs // 2):]
+
+    # --- Rank Definitions for Centering ---
+    # Top IVs
+    if top_ivs:
+        lines.append("  subgraph cluster_top_IVs {")
+        lines.append("    rank=max;") # Pushes these IVs up (or left in LR layout)
+        lines.append("    style=invis;")
+        for iv in top_ivs:
+             # Create the nodes for IVs combined with Region for uniqueness
+            for region in region_inputs.keys():
+                lines.append(f"    \"{iv} ({region})\";")
+        lines.append("  }")
     
-    # 1. Place Independent Variables (IVs) in one rank/cluster (Top Rank)
-    iv_nodes = []
-    for iv in independent_vars:
-        # Create a single node for the IV name, which will link to the DV
-        iv_nodes.append(f'"{iv}" [label="{iv}"];')
-    lines.append("  subgraph cluster_IVs {")
-    lines.append("    rank=min;") # Pushes IVs to the top/outer edge
-    lines.append("    style=invis;")
-    lines.extend([f"    {node}" for node in iv_nodes])
-    lines.append("  }")
-
-    # 2. Place Dependent Variable (DV) in a separate central rank
-    lines.append(f"  \"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\", label=\"{dep}\"];")
-    lines.append(f"  {{rank=same; \"{dep}\";}}") # Explicitly define the rank for centrality (optional, but helps)
-
-    # 3. Create regional subgraphs (for IV labels)
-    for i, region in enumerate(region_inputs.keys()):
-        # We use 'subgraph' for the label/box, but the actual IV nodes are outside for the central flow
-        lines.append(f"  subgraph cluster_region_{i} {{")
-        lines.append(f"    label=\"{region}\"; style=dashed; color=gray; fontsize=10;")
-        # Link the regional IV nodes to the central DV node
-        for iv in independent_vars:
-            lines.append(f"    \"Region_{region}_{iv}\" [label=\"{region} {iv}\", shape=plaintext, style=invis, width=0.1, height=0.1];")
-            # Connect the IV node to the hidden regional node to help group/organize.
-            lines.append(f'"{iv}" -> "Region_{region}_{iv}" [style=invis];')
+    # Bottom IVs
+    if bottom_ivs:
+        lines.append("  subgraph cluster_bottom_IVs {")
+        lines.append("    rank=min;") # Pushes these IVs down (or left in LR layout)
+        lines.append("    style=invis;")
+        for iv in bottom_ivs:
+             # Create the nodes for IVs combined with Region for uniqueness
+            for region in region_inputs.keys():
+                lines.append(f"    \"{iv} ({region})\";")
         lines.append("  }")
 
+    # --- Regional Subgraphs and Edges ---
+    for i, region in enumerate(region_inputs.keys()):
+        lines.append(f"  subgraph cluster_{i} {{")
+        lines.append(f"    label=\"{region}\"; style=dashed; color=gray; fontsize=10;")
+        
+        # Link the regional IV nodes to the central DV node
+        for iv in independent_vars:
+            iv_label = f"{iv} ({region})"
+            
+            # Draw edges from the regional IV node to the central DV node
+            rel = region_inputs[region][iv]
+            color = color_map.get(rel, "#7F8C8D")
+            style = edge_style(rel)
+            label = rel if show_labels else ""
+            lines.append(f"    \"{iv_label}\" -> \"{dep}\" [color=\"{color}\", penwidth={edge_penwidth}, style={style}, label=\"{label}\"];")
+        
+        lines.append("  }")
+    
+    # Define edge styles
     def edge_style(rel):
         if "N" in rel and rel != "NEG":
             return "dashed"
@@ -158,33 +183,21 @@ def build_dot(dep, independent_vars, region_inputs, color_map):
             return "dotted"
         return "solid"
 
-    # 4. Draw edges from IVs to DV
-    for region, rels in region_inputs.items():
-        for iv, rel in rels.items():
-            color = color_map.get(rel, "#7F8C8D")
-            style = edge_style(rel)
-            label = rel if show_labels else ""
-            # Draw edge from IV to DV
-            lines.append(f"  \"{iv}\" -> \"{dep}\" [color=\"{color}\", penwidth={edge_penwidth}, style={style}, label=\"{label}\", headlabel=\"{region}\"];")
-            # Use headlabel or taillabel to put the region text on the edge, or keep it in the cluster label.
-            # Using headlabel in this way might clutter it; sticking to the cluster label is usually cleaner.
-
     lines.append("}")
     return "\n".join(lines)
 
 # --- Update build_dot call ---
-dot = build_dot(dep, independent_vars, region_inputs, color_map)
+dot = build_dot(dep, independent_vars, region_inputs, layout_lr, color_map)
 
 # --- Graph Preview ---
-st.subheader("Graph Preview (Centralized Layout)")
-# Use the full width for the centralized plot
+st.subheader("📊 Graph Preview (Centralized DV Layout)")
 st.graphviz_chart(dot, use_container_width=True)
 
 # --- Instructions for Screenshot ---
 st.markdown("""
 <br>
 ### 📸 Screenshot Instructions
-To save the graph, you can use your operating system's built-in screenshot tool (Snipping Tool on Windows, Screenshot on macOS) to capture the preview above.
+To save the graph, please use your operating system's built-in screenshot tool (e.g., **Snipping Tool** on Windows, **Cmd + Shift + 4** on macOS) to capture the preview above.
 """, unsafe_allow_html=True)
 
 
@@ -200,6 +213,6 @@ legend_text += ", ".join([f"**{iv[:3].upper()}** = {iv}" for iv in independent_v
 
 st.markdown(legend_text)
 
-# --- Removed Download buttons as requested ---
+# --- Download functionality removed ---
 st.markdown("---")
-st.info("Download functionality has been removed as requested. Please use a screenshot tool.")
+st.info("Download functionality has been removed as requested.")

@@ -1,4 +1,4 @@
-# Graphical Abstract Builder v10 — Password Protected + Real Downloads
+# Graphical Abstract Builder v10 — Password Protected + Viewing Mode
 # Author: ChatGPT & Dr. Meo
 
 import streamlit as st
@@ -8,6 +8,7 @@ from io import BytesIO
 import os
 
 # --- FIX: Add Graphviz to PATH ---
+# Note: This line is platform-specific and might need adjustment for users without Graphviz installed locally.
 os.environ["PATH"] += os.pathsep + 'C:/Program Files/Graphviz/bin/'
 
 st.set_page_config(page_title="Graphical Abstract Builder v10", layout="wide")
@@ -22,15 +23,11 @@ if password != "1992":
 
 st.success("Access Granted — Welcome to the Graphical Abstract Builder v10!")
 
-st.title("Graphical Abstract Builder v10 — Regional Comparative Mode with Downloads & Password Access")
+st.title("Graphical Abstract Builder v10 — Regional Comparative Mode with Centralized DV")
 
 st.markdown("""
 Create professional graphical abstracts for research.
-Now includes:
-- Password protection (default: **1992**)  
-- Background color and gradient options  
-- Regional clusters with same dependent variable  
-- Real **SVG/PNG/DOT download support** - Adjustable layout and width  
+This version features a **centralized Dependent Variable (DV)** with surrounding **Independent Variables (IVs)** for a visually appealing, radial layout.
 """)
 
 # --- Mode selection ---
@@ -39,7 +36,7 @@ mode = st.selectbox("Select Mode", ["Sample Example", "Custom Input"])
 if mode == "Sample Example":
     regions = ["Asia", "Europe", "America"]
     dep = "GDP"
-    independent_vars = ["Inflation", "Tourism", "Political Stability"]
+    independent_vars = ["Inflation", "Tourism", "Political Stability", "Trade Openness", "Exchange Rate"] # Added more for better center effect
 else:
     st.sidebar.header("Custom Inputs")
     regions_input = st.sidebar.text_input("Regions (comma-separated)", "Asia,Europe,America")
@@ -107,30 +104,50 @@ st.sidebar.header("Styling Options")
 show_labels = st.sidebar.checkbox("Show relationship codes on arrows", value=True)
 edge_penwidth = st.sidebar.slider("Arrow thickness", 1, 8, 2)
 node_color = st.sidebar.color_picker("Node color", "#FFFFFF")
-layout_lr = st.sidebar.radio("Layout Direction", ["Left→Right", "Top→Bottom"], index=0)
-width = st.sidebar.slider("Graph width", 500, 2000, 1000, step=100)
-height = st.sidebar.slider("Graph height", 300, 1500, 700, step=100)
+# Removed layout_lr radio since the layout is now forced to be radial/TB for centering.
+# Removed width/height sliders to let Graphviz handle best fit for the radial layout.
 
-# --- Graphviz builder ---
-def build_dot(dep, independent_vars, region_inputs, layout, color_map):
+# --- Graphviz builder (MODIFIED) ---
+def build_dot(dep, independent_vars, region_inputs, color_map):
     lines = ["digraph G {"]
-    lines.append(f"  rankdir={'LR' if 'Left' in layout else 'TB'};")
+    # Force layout to Top-Bottom for central DV placement
+    lines.append("  rankdir=TB;") 
+    # Use splines=curved or ortho to improve pathing around the central node
+    lines.append("  splines=curved;")
     lines.append(f'  node [shape=box, style=filled, fillcolor="{node_color}", fontname="Helvetica", fontsize=11];')
     lines.append('  edge [fontname="Helvetica", fontsize=9];')
 
     if bg_mode == "Gradient":
-        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}:{bg_color2}", gradientangle=270];')
+        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}:{bg_color2}", gradientangle=270, nodesep=0.6];')
     else:
-        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}"];')
+        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}", nodesep=0.6];')
+    
+    # 1. Place Independent Variables (IVs) in one rank/cluster (Top Rank)
+    iv_nodes = []
+    for iv in independent_vars:
+        # Create a single node for the IV name, which will link to the DV
+        iv_nodes.append(f'"{iv}" [label="{iv}"];')
+    lines.append("  subgraph cluster_IVs {")
+    lines.append("    rank=min;") # Pushes IVs to the top/outer edge
+    lines.append("    style=invis;")
+    lines.extend([f"    {node}" for node in iv_nodes])
+    lines.append("  }")
 
+    # 2. Place Dependent Variable (DV) in a separate central rank
+    lines.append(f"  \"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\", label=\"{dep}\"];")
+    lines.append(f"  {{rank=same; \"{dep}\";}}") # Explicitly define the rank for centrality (optional, but helps)
+
+    # 3. Create regional subgraphs (for IV labels)
     for i, region in enumerate(region_inputs.keys()):
-        lines.append(f"  subgraph cluster_{i} {{")
+        # We use 'subgraph' for the label/box, but the actual IV nodes are outside for the central flow
+        lines.append(f"  subgraph cluster_region_{i} {{")
         lines.append(f"    label=\"{region}\"; style=dashed; color=gray; fontsize=10;")
+        # Link the regional IV nodes to the central DV node
         for iv in independent_vars:
-            lines.append(f"    \"{iv} ({region})\";")
+            lines.append(f"    \"Region_{region}_{iv}\" [label=\"{region} {iv}\", shape=plaintext, style=invis, width=0.1, height=0.1];")
+            # Connect the IV node to the hidden regional node to help group/organize.
+            lines.append(f'"{iv}" -> "Region_{region}_{iv}" [style=invis];')
         lines.append("  }")
-
-    lines.append(f"  \"{dep}\" [shape=ellipse, style=filled, fillcolor=\"#ECF0F1\"];")
 
     def edge_style(rel):
         if "N" in rel and rel != "NEG":
@@ -141,22 +158,35 @@ def build_dot(dep, independent_vars, region_inputs, layout, color_map):
             return "dotted"
         return "solid"
 
+    # 4. Draw edges from IVs to DV
     for region, rels in region_inputs.items():
         for iv, rel in rels.items():
-            iv_label = f"{iv} ({region})"
             color = color_map.get(rel, "#7F8C8D")
             style = edge_style(rel)
             label = rel if show_labels else ""
-            lines.append(f"  \"{iv_label}\" -> \"{dep}\" [color=\"{color}\", penwidth={edge_penwidth}, style={style}, label=\"{label}\"];")
+            # Draw edge from IV to DV
+            lines.append(f"  \"{iv}\" -> \"{dep}\" [color=\"{color}\", penwidth={edge_penwidth}, style={style}, label=\"{label}\", headlabel=\"{region}\"];")
+            # Use headlabel or taillabel to put the region text on the edge, or keep it in the cluster label.
+            # Using headlabel in this way might clutter it; sticking to the cluster label is usually cleaner.
 
     lines.append("}")
     return "\n".join(lines)
 
-dot = build_dot(dep, independent_vars, region_inputs, layout_lr, color_map)
+# --- Update build_dot call ---
+dot = build_dot(dep, independent_vars, region_inputs, color_map)
 
 # --- Graph Preview ---
-st.subheader("Graph Preview")
-st.graphviz_chart(dot, use_container_width=False)
+st.subheader("Graph Preview (Centralized Layout)")
+# Use the full width for the centralized plot
+st.graphviz_chart(dot, use_container_width=True)
+
+# --- Instructions for Screenshot ---
+st.markdown("""
+<br>
+### 📸 Screenshot Instructions
+To save the graph, you can use your operating system's built-in screenshot tool (Snipping Tool on Windows, Screenshot on macOS) to capture the preview above.
+""", unsafe_allow_html=True)
+
 
 # --- Legend ---
 st.markdown("---")
@@ -170,24 +200,6 @@ legend_text += ", ".join([f"**{iv[:3].upper()}** = {iv}" for iv in independent_v
 
 st.markdown(legend_text)
 
-# --- Download buttons (SVG, PNG, DOT) ---
-try:
-    # FIX: Use the graphviz Source with proper configuration
-    graph_obj = graphviz.Source(dot)
-    
-    # Try different formats
-    svg_data = graph_obj.pipe(format='svg')
-    png_data = graph_obj.pipe(format='png')
-    
-    st.download_button("📥 Download .SVG", data=svg_data, file_name="graphical_abstract_v10.svg", mime="image/svg+xml")
-    st.download_button("📥 Download .PNG", data=png_data, file_name="graphical_abstract_v10.png", mime="image/png")
-    
-    st.success("✓ Download functionality is working!")
-
-except Exception as e:
-    st.error(f"Download error: {e}")
-    st.info("Please ensure Graphviz is installed and the path is correct. Current PATH includes Graphviz.")
-
-# DOT download should always work
-dot_bytes = dot.encode("utf-8")
-st.download_button("📄 Download .DOT", data=dot_bytes, file_name="graphical_abstract_v10.dot", mime="text/vnd.graphviz")
+# --- Removed Download buttons as requested ---
+st.markdown("---")
+st.info("Download functionality has been removed as requested. Please use a screenshot tool.")

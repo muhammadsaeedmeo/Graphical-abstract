@@ -125,9 +125,10 @@ def build_dot(dep, independent_vars, region_inputs, layout, color_map):
     lines.append('  edge [fontname="Helvetica", fontsize=9];')
 
     if bg_mode == "Gradient":
-        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}:{bg_color2}", gradientangle=270];')
+        lines.append(f'  bgcolor="{bg_color1}:{bg_color2}";')
+        lines.append(f'  gradientangle=270;')
     else:
-        lines.append(f'  graph [style=filled, fillcolor="{bg_color1}"];')
+        lines.append(f'  bgcolor="{bg_color1}";')
 
     # Place DV at center with fixed position
     lines.append(f'  "{dep}" [shape=ellipse, style=filled, fillcolor="#ECF0F1", pos="0,0!", fixedsize=true, width=1.5, height=1];')

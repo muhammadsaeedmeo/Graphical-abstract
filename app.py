@@ -62,7 +62,7 @@ if tool_choice == "Graphical Abstract Generator":
         dep_shape = st.selectbox("Dependent Variable Shape:", ["circle", "rectangle", "hexagon"], key="dep_shape")
         
         st.subheader("📊 Independent Variables")
-        num_independent = st.number_input("Number of Independent Variables:", min_value=1, max_value=10, value=4, key="num_indep")
+        num_independent = st.number_input("Number of Independent Variables:", min_value=1, max_value=40, value=4, key="num_indep")
         
         independent_vars = []
         for i in range(num_independent):
